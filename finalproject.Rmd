@@ -1,0 +1,62 @@
+---
+title: "finalproject"
+output: github_document
+date: "2022-11-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+This is our Project Proposal:
+
+**The group members (names and UNIs):**
+Aakriti Shukla - ag2965
+Elise Kang - ek2794 
+Jennifer Lee - jl 2361
+Aaron Mittel - am4656
+Margaret Ding - md4036
+
+
+**Tentative title:** Trends in Popular Baby Names Utilizing NYC Open Data
+
+
+**The motivation for this project:** Immense thought processes are involved when picking a name for a child. Looking through “popular baby names” books or looking at lists online of top 10 names are a laborious process. Our aim is to try to make this process easier! We are curious to see how the name trends have changed over the years (e.g. popular first letter of names, names by year, names by ethnicity, etc.)
+
+**The intended final products:**
+A website with visualizations of trends in baby names broken down by year and ethnicity. We can do this by both names and first letters of names. 
+Additionally, while this isn’t part of the dataset, it would be meaningful/useful to show meanings behind names as well.
+
+**The anticipated data sources:**
+NYC Open Data
+https://data.cityofnewyork.us/Health/Popular-Baby-Names/25th-nujf
+
+**The planned analyses / visualizations / coding challenges**
+We would like to create dashboards visualizing trends. Since names inherently are unique categories, we will have to work on adding additional layers to make the name variable itself more meaningful - e.g. popularity by ethnicity, “A” names, meaning behind name, etc.
+
+**The planned timeline (by week and goals):**
+11/14: Finalized goals of project
+11/28: Create templates for each aspect of project
+12/5: Finalized project online 
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
