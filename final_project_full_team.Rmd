@@ -1,0 +1,145 @@
+---
+title: "final_project_full_team"
+author: "TEAM Shukla-Kang-Lee-Mittel-Ding"
+date: "`r format(Sys.time())`"
+output: html_document
+---
+
+Code chunk for set up and initial data load/tidying:
+```{r setup, include = FALSE}
+library(tidyverse)
+library(patchwork)
+library(plotly)
+library(leaflet)
+
+knitr::opts_chunk$set(
+echo = TRUE,
+warning = FALSE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%")
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+```{r}
+nypd_shooting_df = 
+  read_csv("data/nypd_shooting_data.csv") %>%
+  janitor::clean_names() %>%
+  separate(col = occur_date, into = c("month", "day", "year"), sep = "/") %>% 
+  separate(col = occur_time, into = c("hour", "minute", "second"), sep = ":") %>%
+  mutate(across(where(is.character), tolower),
+         month = as.numeric(month),
+         month_name = recode(month, "1" = "january", "2" = "february", "3" = "march", "4" = "april", "5" = "may", "6" = "june", "7" = "july", "8" = "august", "9" = "september", "10" = "october", "11" = "november", "12" = "december"),
+         day = as.numeric(day),
+         year = as.numeric(year), 
+         hour = as.numeric(hour),
+         minute = as.numeric(minute), 
+         second = as.numeric(second),
+         minute_calc = hour * 60 + minute,
+         boro = as.factor(boro), 
+         boro = fct_relevel(boro, "manhattan", "brooklyn", "bronx", "queens", "staten island")) %>%
+  select(incident_key, year, month_name, month, day, hour, minute, second, minute_calc, everything())
+```
+
+**Aaki additions:**
+Scatterplot with location of shooting - text label contains month, year, victim’s age group, perp’s age group - spacing is not great, need to fix
+```{r}
+nypd_shooting_df %>%
+  mutate(text_label = str_c("Month", month_name, "Year", year, "Victim's Age Group", vic_age_group, "Perpetrator's Age Group", perp_age_group)) %>% 
+  plot_ly(
+    x = ~latitude, y = ~longitude, type = "scatter", mode = "markers",
+    color = ~year, text = ~text_label, alpha = 0.5)
+```
+
+Box plot with shootings by boro by year - would have loved another continuous variable instead of year, but couldn’t identify a good one
+```{r}
+nypd_shooting_df %>% 
+  mutate(boro = fct_reorder(boro, year)) %>% 
+  plot_ly(y = ~year, color = ~boro, type = "box", colors = "viridis")
+```
+
+Cluster map:
+```{r}
+nypd_shooting_df %>%
+  leaflet() %>%
+  addTiles() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(lat = ~latitude, lng = ~longitude, radius = .25) %>%
+  addMarkers(
+  clusterOptions = markerClusterOptions())
+```
+
+**Jen Lee:**
+Similar as aboveoverlaid over NYC map using leaflet library (added that to set up code chunk), text label has month, year, boro, location description
+```{r}
+pal <- colorFactor("viridis", nypd_shooting_df$year)
+
+  nypd_shooting_df %>%
+  mutate(
+    text_label = str_c(month_name, " ", year, ", ", boro, ", ", location_desc)) %>%
+  leaflet() %>%
+  addTiles() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(lat = ~latitude, lng = ~longitude, radius = .1, color = ~pal(year), label = ~text_label) %>%
+  addLegend("bottomright", pal = pal, values = ~year,
+    title = "year")
+```
+
+Stacked bar plot showing similar information as above, shootings by boro by year
+```{r}
+nypd_shooting_df %>%
+  group_by(year, boro) %>%
+  summarise(
+    count = n()) %>%
+  ggplot(aes(fill = boro, y = count, x = year)) +
+  geom_bar(position = "stack", stat = "identity") + 
+  labs(title = "Number of shootings by boro from 2006-2021")
+```
+
+Line plot showing similar information as above, shootings by boro by year
+```{r}
+nypd_shooting_df %>%
+group_by(year, boro) %>%
+  summarise(
+    count = n()) %>%
+  ggplot(aes(y = count, x = year, group = boro, color = boro)) +
+  geom_point() + geom_line() +
+  facet_grid(cols = vars(boro)) + 
+  labs(title = "Number of shootings by boro from 2006-2021")
+```
+
+Bar plot with number of shootings by boro - if this is right, BK is more dangerous than I thought!
+```{r}
+nypd_shooting_df %>% 
+  count(boro) %>% 
+  mutate(boro = fct_reorder(boro, n)) %>% 
+  plot_ly(x = ~boro, y = ~n, color = ~boro, type = "bar", colors = "viridis")
+```
+
+**Elise Kang:**
+Line plot showing similar information, shootings by season (summer = highest, winter = lowest)
+```{r}
+nypd_shooting_seasons = nypd_shooting_df %>%
+  mutate(
+    season = case_when(
+      month %in% 9:11 ~ "Fall",
+      month %in% c(12, 1, 2) ~ "Winter",
+      month %in% 3:5 ~ "Spring",
+      TRUE ~ "Summer")) 
+
+nypd_shooting_seasons %>%
+  group_by(year, season) %>%
+  summarise(
+    count = n()) %>%
+ggplot(aes(y = count, x = year, group = season, color = season)) +
+  geom_point() + geom_line() +
+  facet_grid(cols = vars(season)) + 
+  labs(title = "Number of shootings by season from 2006-2021")
+```

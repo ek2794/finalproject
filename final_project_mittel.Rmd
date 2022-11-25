@@ -1,0 +1,238 @@
+---
+title: "p8105_final_project_working"
+author: "Aaron Mittel"
+date: "`r format(Sys.time())`"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+library(patchwork)
+library(plotly)
+library(leaflet)
+library(lubridate)
+
+knitr::opts_chunk$set(
+echo = TRUE,
+warning = FALSE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%")
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+```{r basic data framing and tidying, include = TRUE, message = FALSE, warning = FALSE, echo = FALSE}
+nypd_shooting_df = 
+  read_csv("data/nypd_shooting_data.csv") %>%
+  janitor::clean_names() %>%
+  separate(col = occur_date, into = c("month", "day", "year"), sep = "/") %>% 
+  separate(col = occur_time, into = c("hour", "minute", "second"), sep = ":") %>%
+  mutate(across(where(is.character), tolower),
+         month = as.numeric(month),
+         month_name = recode(month, "1" = "january", "2" = "february", "3" = "march", "4" = "april", "5" = "may", "6" = "june", "7" = "july", "8" = "august", "9" = "september", "10" = "october", "11" = "november", "12" = "december"),
+         day = as.numeric(day),
+         year = as.numeric(year), 
+         hour = as.numeric(hour),
+         minute = as.numeric(minute), 
+         second = as.numeric(second),
+         minute_calc = hour * 60 + minute,
+         boro = as.factor(boro), 
+         boro = fct_relevel(boro, "manhattan", "brooklyn", "bronx", "queens", "staten island"),
+         date = make_date(year = year, month = month, day = day)) %>% 
+  relocate(incident_key, date)
+```
+
+```{r function for holidays 2010 - 2021, include = TRUE, echo = FALSE, warning = FALSE, message = FALSE}
+holidays = function(x) {
+  if (x == "2010-01-01" | x == "2012-01-02" | x == "2013-01-01" | x ==	"2014-01-01" | x ==	"2015-01-01"| x == "2016-01-01" | x == "2017-01-02" | x ==	"2018-01-01" | x == "2019-01-01" | x ==	"2020-01-01" | x ==	"2021-01-01") {"new year's day observed"}
+  else if (x == "2010-01-18"| x == "2011-01-17"| x ==	"2012-01-16"| x ==	"2013-01-21"| x ==	"2014-01-20"| x ==	"2015-01-19"| x ==	"2016-01-18"| x ==	"2017-01-16"| x ==	"2018-01-15"| x ==	"2019-01-21"| x ==	"2020-01-20"| x ==	"2021-01-18") {"mlk day"}
+  else if (x == "2010-02-12"| x ==	"2011-02-12"| x ==	"2012-02-13"| x ==	"2013-02-12"| x ==	"2014-02-12"| x ==	"2015-02-12"| x ==	"2016-02-12"| x ==	"2017-02-13"| x ==	"2018-02-12"| x ==	"2019-02-12"| x ==	"2020-02-12"| x ==	"2021-02-12") {"lincoln's bday"}
+  else if (x == "2010-02-15"| x ==	"2011-02-21"| x ==	"2012-02-20"| x ==	"2013-02-18"| x ==	"2014-02-17"| x ==	"2015-02-16"| x ==	"2016-02-15"| x ==	"2017-02-20"| x ==	"2018-02-19"| x ==	"2019-02-18"| x ==	"2020-02-17"| x ==	"2021-02-15") {"washington's bday"}
+  else if (x == "2010-05-31"| x ==	"2011-05-30"| x ==	"2012-05-28"| x ==	"2013-05-27"| x ==	"2014-05-26"| x ==	"2015-05-25"| x ==	"2016-05-30"| x ==	"2017-05-29"| x ==	"2018-05-28"| x ==	"2019-05-27"| x ==	"2020-05-25"| x ==	"2021-05-31") {"memorial day"}
+    else if (x == "2010-06-19"| x == "2011-06-19" | x == "2012-06-19" | x == "2013-06-19" | x == "2014-06-19" | x ==	"2015-06-19" | x ==	"2016-06-19" | x ==	"2017-06-19" | x ==	"2018-06-19" | x ==	"2019-06-19" | x ==	"2020-06-19" | x ==	"2021-06-19") {"juneteenth"}
+  else if (x == "2010-07-04"| x ==	"2011-07-04"| x ==	"2012-07-04"| x ==	"2013-07-04"| x ==	"2014-07-04"| x ==	"2015-07-03"| x ==	"2016-07-04"| x ==	"2017-07-04"| x ==	"2018-07-04"| x ==	"2019-07-04"| x ==	"2020-07-03"| x ==	"2021-07-05") {"independence day"}
+  else if (x == "2010-09-06"| x ==	"2011-09-05"| x ==	"2012-09-03"| x ==	"2013-09-02"| x ==	"2014-09-01"| x ==	"2015-09-07"| x ==	"2016-09-05"| x ==	"2017-09-04"| x ==	"2018-09-03"| x ==	"2019-09-02"| x ==	"2020-09-07"| x ==	"2021-09-06") {"labor day"}
+  else if (x == "2010-10-11"| x ==	"2011-10-11"| x ==	"2012-10-08" | x ==	"2013-10-14"| x ==	"2014-10-13"| x ==	"2015-10-12"| x ==	"2016-10-10"| x ==	"2017-10-09"| x ==	"2018-10-08"| x ==	"2019-10-14"| x ==	"2020-10-12"| x ==	"2021-10-11") {"columbus day"}
+  else if (x == "2010-11-11"| x ==	"2011-11-11"| x ==	"2012-11-12"| x ==	"2013-11-11"| x ==	"2014-11-11"| x ==	"2015-11-11"| x ==	"2016-11-11"| x ==	"2017-11-10"| x ==	"2018-11-12"| x ==	"2019-11-11"| x ==	"2020-11-11"| x ==	"2021-11-11") {"veteran's day"}
+  else if (x == "2010-11-25"| x ==	"2011-11-24"| x ==	"2012-11-22"| x ==	"2013-11-28"| x ==	"2014-11-27"| x ==	"2015-11-26"| x ==	"2016-11-24"| x ==	"2017-11-23"| x ==	"2018-11-22"| x ==	"2019-11-28"| x ==	"2020-11-26"| x ==	"2021-11-25") {"thanksgiving"}
+  else if (x == "2010-12-24"| x ==	"2011-12-26"| x ==	"2012-12-25"| x ==	"2013-12-15"| x ==	"2014-12-25"| x ==	"2015-12-25"| x ==	"2016-12-26"| x ==	"2017-12-25"| x ==	"2018-12-25"| x ==	"2019-11-25"| x ==	"2020-12-25"| x ==	"2021-12-24") {"christmas observed"}
+  else {"non-holiday"}
+}
+```
+
+```{r testing funcion, include = FALSE, echo = FALSE, message = FALSE, warning = FALSE}
+holidays(nypd_shooting_df$date[[1]])
+
+holidays(nypd_shooting_df$date[[2]])
+
+holidays(nypd_shooting_df$date[[3]])
+```
+
+```{r nypd shootings on holidays dataframe, include = FALSE, echo = FALSE, message = FALSE}
+# Limiting data to years 2010 - 2021
+# This takes several minutes to run due to mapping many criteria to a large dataset
+nypd_shooting_holidays = 
+  nypd_shooting_df %>% 
+  filter(
+    year >= 2010) %>% 
+  mutate(
+    holiday_summary = map(date,holidays)) %>% 
+  relocate(incident_key, date, holiday_summary) %>% 
+  unnest(holiday_summary) 
+```
+
+## How do total shootings on NYC/Federal holidays differ by year?
+```{r bar plot count per year in each boro by holiday, include = TRUE, echo = FALSE, warning = FALSE, message = FALSE}
+nypd_shooting_holidays %>% 
+  filter(
+    holiday_summary != "non-holiday")%>% 
+  group_by(year, boro, holiday_summary) %>% 
+  summarize(
+    count = n()) %>% 
+  plot_ly(x = ~year, y = ~count, color = ~holiday_summary, type = "bar") %>% 
+  layout(yaxis = list(title = "Count"), barmode = "stack") %>% 
+  layout(xaxis = list(title = "Year"))
+```
+
+## Are some holidays "safer" than others?
+```{r total shootings 2010 - 2021 per holiday, include = TRUE, message = FALSE, warning = FALSE, echo = FALSE}
+nypd_shooting_holidays %>% 
+  filter(
+    holiday_summary != "non-holiday") %>% 
+  # Lincoln's Birthday and President's Birthday combined as "President's Day"
+  mutate(
+    holiday_summary = str_replace(holiday_summary, "washington's bday","president's day"),
+    holiday_summary = str_replace(holiday_summary, "lincoln's bday","president's day")) %>% 
+  count(holiday_summary) %>% 
+  mutate(
+    holiday_summary = fct_reorder(holiday_summary,n)) %>% 
+  plot_ly(x = ~holiday_summary, y = ~n, color = ~holiday_summary, type = "bar") %>% 
+  layout(yaxis = list(title = "Count"), xaxis = list(title = "Holiday"), title = "NYC Shootings Per Holiday, 2010 - 2021") %>% 
+  hide_legend()
+```
+
+## What is the distribution of perpetrators' age on non-holidays compared to holidays?
+```{r perp ages histograms, include = TRUE, echo = FALSE, message = FALSE, warning= FALSE}
+perp_ages_non_holidays_histogram = 
+nypd_shooting_holidays %>% 
+  filter(
+    holiday_summary == "non-holiday"
+  ) %>% 
+  # omitting age ranges of 1020, 224, and 940 which have 1 incident each and may be typos
+  mutate(
+    perp_age_group = str_replace(perp_age_group, "1020", "typo"),
+    perp_age_group = str_replace(perp_age_group, "224","typo"),
+    perp_age_group = str_replace(perp_age_group, "940","typo")) %>% 
+  drop_na(perp_age_group) %>% 
+  filter(perp_age_group != "typo") %>% 
+  plot_ly(x = ~perp_age_group, type = "histogram") %>% 
+  layout(xaxis = list(title = "Perpetrator Age Group"), yaxis = list(title = "Count"))
+
+perp_age_holidays_histogram = 
+nypd_shooting_holidays %>% 
+  filter(
+    holiday_summary != "non-holiday"
+  ) %>% 
+  drop_na(perp_age_group) %>% 
+  plot_ly(x = ~perp_age_group, type = "histogram") %>% 
+  layout(xaxis = list(title = "Perpetrator Age Group"), yaxis = list(title = "Count"))
+
+subplot(perp_ages_non_holidays_histogram, perp_age_holidays_histogram, shareX = TRUE, shareY = TRUE, titleX = FALSE, titleY = TRUE)
+```
+
+## What is the distribution of victims' age on non-holidays compared to holidays?
+```{r victim ages histograms, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+vic_ages_non_holidays_histogram = 
+nypd_shooting_holidays %>% 
+  filter(
+    holiday_summary == "non-holiday"
+  ) %>% 
+  drop_na(vic_age_group) %>% 
+  plot_ly(x = ~vic_age_group, type = "histogram") %>% 
+  layout(xaxis = list(title = "Victim Age Group"), yaxis = list(title = "Count"))
+
+
+vic_ages_holidays_histogram = 
+nypd_shooting_holidays %>% 
+  filter(
+    holiday_summary != "non-holiday"
+  ) %>% 
+  drop_na(vic_age_group) %>% 
+  plot_ly(x = ~vic_age_group, type = "histogram") %>% 
+  layout(xaxis = list(title = "Victim Age Group"), yaxis = list(title = "Count"))
+
+subplot(vic_ages_non_holidays_histogram, vic_ages_holidays_histogram, shareX = TRUE, shareY = TRUE, titleX = FALSE, titleY = TRUE)
+```
+
+## Is there a significant difference in the proportion of shooting perpetrators that are < 18 years old compared to perpetrators > 18 years old on holidays compared to non-holidays?
+```{r prop test perp age <18 vs adult on holiday vs non-holiday, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+holiday_binary_perp_age_df = 
+nypd_shooting_holidays %>% 
+    # omitting age ranges of 1020, 224, and 940 which have 1 incident each and may be typos
+  mutate(
+    perp_age_group = str_replace(perp_age_group, "1020", "typo"),
+    perp_age_group = str_replace(perp_age_group, "224","typo"),
+    perp_age_group = str_replace(perp_age_group, "940","typo")) %>% 
+  drop_na(vic_age_group) %>% 
+  drop_na(perp_age_group) %>% 
+  filter(perp_age_group != "typo") %>% 
+  mutate(
+    holiday_binary = ifelse(holiday_summary != "non-holiday","holiday","non-holiday"),
+    perp_juvenile = ifelse(perp_age_group == "<18","juvenile","adult")) %>% 
+  group_by(perp_juvenile, holiday_binary) %>% 
+  summarize(
+    count = n()) %>%
+  pivot_wider(
+    names_from = perp_juvenile,
+    values_from = count) %>%
+  janitor::clean_names() %>% 
+  relocate(holiday_binary, juvenile) %>% 
+  mutate(
+    total = juvenile + adult,
+    proportion_juvenile = juvenile/total)
+
+holiday_binary_perp_age_df %>% 
+  knitr::kable(digits = 4)
+
+prop.test(holiday_binary_perp_age_df$juvenile,holiday_binary_perp_age_df$total) %>% 
+  broom::tidy() %>% 
+  select(-estimate1, -estimate2, -statistic, -parameter, -alternative) %>%
+  knitr::kable()
+```
+
+## Is there a significant difference in the proportion of shooting victims who are < 18 years old compared to victims > 18 years old on holidays compared to non-holidays?
+```{r prop test victim age <18 vs adult on holiday vs non-holiday, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+holiday_binary_vic_age_df = 
+nypd_shooting_holidays %>% 
+  drop_na(vic_age_group) %>% 
+  mutate(
+    holiday_binary = ifelse(holiday_summary != "non-holiday","holiday","non-holiday"),
+    vic_juvenile = ifelse(vic_age_group == "<18","juvenile","adult")) %>% 
+  group_by(vic_juvenile, holiday_binary) %>% 
+  summarize(
+    count = n()) %>%
+  pivot_wider(
+    names_from = vic_juvenile,
+    values_from = count) %>%
+  janitor::clean_names() %>% 
+  relocate(holiday_binary, juvenile) %>% 
+  mutate(
+    total = juvenile + adult,
+    proportion_juvenile = juvenile/total)
+
+holiday_binary_vic_age_df %>% 
+  knitr::kable(digits = 4)
+
+prop.test(holiday_binary_vic_age_df$juvenile,holiday_binary_vic_age_df$total) %>% 
+  broom::tidy() %>% 
+  select(-estimate1, -estimate2, -statistic, -parameter, -alternative) %>%
+  knitr::kable()
+```
